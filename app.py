@@ -1,44 +1,98 @@
 import streamlit as st
 import joblib
+from tensorflow.keras.models import load_model
 import numpy as np
+import os
+import requests
 
-# Preprocessor and vectorizer
-preprocessor = joblib.load('preprocessor.jb')
-vectorizer = joblib.load('vectorizer.jb')
+# -------------------------------
+# Google Drive download helper
+# -------------------------------
+def download_file_from_google_drive(file_id, dest_path):
+    URL = "https://drive.google.com/uc?export=download"
+    session = requests.Session()
+    response = session.get(URL, params={'id': file_id}, stream=True)
 
-# Load models
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            response = session.get(URL, params={'id': file_id, 'confirm': value}, stream=True)
+            break
+
+    with open(dest_path, 'wb') as f:
+        for chunk in response.iter_content(32768):
+            if chunk:
+                f.write(chunk)
+
+# -------------------------------
+# GDrive files (only for large ones)
+# -------------------------------
+gdrive_files = {
+    "knn_model.jb":  "1Fh1A5BvPV6sJJJeIBdFKJu3cDAxvDig3",
+    "rf_model.jb":   "10LLGlmX8hmYUAp1VeuKlUrTbvI2VtCZk"
+    
+}
+
+for filename, file_id in gdrive_files.items():
+    if not os.path.exists(filename):
+        download_file_from_google_drive(file_id, filename)
+
+# -------------------------------
+# Load Models and Vectorizers
+# -------------------------------
+vectorizer = joblib.load('vectorizer.jb')      # TF-IDF: for LR, ANN
+vectorizer2 = joblib.load('vectorizer2.jb')    # Count: for KNN, tree models, NB
+
 models = {
     "Logistic Regression": ("linear", joblib.load('lr_model.jb')),
     "K-Nearest Neighbors": ("knn", joblib.load('knn_model.jb')),
     "Random Forest": ("tree", joblib.load('rf_model.jb')),
     "Naive Bayes": ("bayes", joblib.load('nb_model.jb'))
+    
 }
 
 # -------------------------------
 # Streamlit UI
 # -------------------------------
 st.title("📰 Fake News Detection")
-st.markdown("Check if a news article is **real or fake** using multiple ML models.")
+st.write("Enter the news article below:")
 
-news_input = st.text_area("Paste your news content below 👇", height=200)
+inputn = st.text_area("News Article")
 
-selected_model_name = st.selectbox("Choose a model for prediction", list(models.keys()))
+if st.button("Check News"):
+    if inputn.strip():
+        st.subheader("🔍 Model-wise Predictions:")
 
-if st.button("Detect"):
-    if news_input.strip() == "":
-        st.warning("Please enter some news text!")
-    else:
-        # Preprocess input
-        cleaned_input = preprocessor.transform([news_input])
-        vectorized_input = vectorizer.transform(cleaned_input)
+        real_count = 0
+        fake_count = 0
 
-        # Load model
-        model_type, model = models[selected_model_name]
+        for name, (model_type, model) in models.items():
+            if model_type in ["linear", "ann"]:
+                vectorized_input = vectorizer.transform([inputn])
+                if model_type == "ann":
+                    vectorized_input = vectorized_input.toarray()
+                    pred = model.predict(vectorized_input)[0][0]
+                    pred = 1 if pred >= 0.5 else 0
+                else:
+                    pred = model.predict(vectorized_input)[0]
+            else:
+                vectorized_input = vectorizer2.transform([inputn])
+                pred = model.predict(vectorized_input)[0]
 
-        # Predict
-        pred = model.predict(vectorized_input)[0]
+            if pred == 1:
+                st.success(f"{name}: Real News ✅")
+                real_count += 1
+            else:
+                st.error(f"{name}: Fake News ❌")
+                fake_count += 1
 
-        if pred == 1:
-            st.error("❌ This news seems to be **Fake**.")
+        st.markdown("---")
+        st.subheader("🧠 Overall Verdict (Majority Voting):")
+
+        if real_count > fake_count:
+            st.success(f"The news is **Most Likely Real** 🟢 ({real_count} out of {len(models)} models)")
+        elif fake_count > real_count:
+            st.error(f"The news is **Most Likely Fake** 🔴 ({fake_count} out of {len(models)} models)")
         else:
-            st.success("✅ This news seems to be **Real**.")
+            st.warning("The models are evenly split. Verdict: **Inconclusive** ⚖️")
+    else:
+        st.warning("Please enter some text to analyze.")
