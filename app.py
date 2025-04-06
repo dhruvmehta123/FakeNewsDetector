@@ -1,6 +1,5 @@
 import streamlit as st
 import joblib
-from tensorflow.keras.models import load_model
 import numpy as np
 import os
 import requests
@@ -29,7 +28,6 @@ def download_file_from_google_drive(file_id, dest_path):
 gdrive_files = {
     "knn_model.jb":  "1Fh1A5BvPV6sJJJeIBdFKJu3cDAxvDig3",
     "rf_model.jb":   "10LLGlmX8hmYUAp1VeuKlUrTbvI2VtCZk"
-    
 }
 
 for filename, file_id in gdrive_files.items():
@@ -39,7 +37,7 @@ for filename, file_id in gdrive_files.items():
 # -------------------------------
 # Load Models and Vectorizers
 # -------------------------------
-vectorizer = joblib.load('vectorizer.jb')      # TF-IDF: for LR, ANN
+vectorizer = joblib.load('vectorizer.jb')      # TF-IDF: for LR
 vectorizer2 = joblib.load('vectorizer2.jb')    # Count: for KNN, tree models, NB
 
 models = {
@@ -47,7 +45,6 @@ models = {
     "K-Nearest Neighbors": ("knn", joblib.load('knn_model.jb')),
     "Random Forest": ("tree", joblib.load('rf_model.jb')),
     "Naive Bayes": ("bayes", joblib.load('nb_model.jb'))
-    
 }
 
 # -------------------------------
@@ -66,14 +63,9 @@ if st.button("Check News"):
         fake_count = 0
 
         for name, (model_type, model) in models.items():
-            if model_type in ["linear", "ann"]:
+            if model_type == "linear":
                 vectorized_input = vectorizer.transform([inputn])
-                if model_type == "ann":
-                    vectorized_input = vectorized_input.toarray()
-                    pred = model.predict(vectorized_input)[0][0]
-                    pred = 1 if pred >= 0.5 else 0
-                else:
-                    pred = model.predict(vectorized_input)[0]
+                pred = model.predict(vectorized_input)[0]
             else:
                 vectorized_input = vectorizer2.transform([inputn])
                 pred = model.predict(vectorized_input)[0]
