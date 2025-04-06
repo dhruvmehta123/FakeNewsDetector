@@ -29,7 +29,7 @@ def download_file_from_google_drive(file_id, dest_path):
 # -------------------------------
 required_files = {
     "ann_model.h5": "1Fh1A5BvPV6sJJJeIBdFKJu3cDAxvDig3",  # ANN model
-    "tfidf_vectorizer.jb": "YOUR_VECTORIZER_FILE_ID"  # Replace with your vectorizer file ID
+    "tfidf_vectorizer.jb": "1lOpfkBsLF5VDnIev4w49HIW9BQRNLutf"  # Replace with your vectorizer file ID
 }
 
 for filename, file_id in required_files.items():
