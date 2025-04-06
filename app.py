@@ -29,7 +29,7 @@ def download_file_from_google_drive(file_id, dest_path):
 # -------------------------------
 required_files = {
     "ann_model.h5": "1Fh1A5BvPV6sJJJeIBdFKJu3cDAxvDig3",  # ANN model
-    "vectorizer.jb": "1lOpfkBsLF5VDnIev4w49HIW9BQRNLutf"  # You'll need to add this
+    "tfidf_vectorizer.jb": "YOUR_VECTORIZER_FILE_ID"  # Replace with your vectorizer file ID
 }
 
 for filename, file_id in required_files.items():
@@ -42,14 +42,36 @@ for filename, file_id in required_files.items():
             st.stop()
 
 # -------------------------------
-# Load Model and Vectorizer
+# Load Model and Vectorizer with error handling
 # -------------------------------
 try:
-    vectorizer = joblib.load('vectorizer.jb')
+    # Load the vectorizer
+    vectorizer = joblib.load('tfidf_vectorizer.jb')
+    
+    # Verify the vectorizer is fitted
+    if not hasattr(vectorizer, 'vocabulary_'):
+        st.error("The vectorizer is not fitted. Please provide a properly fitted vectorizer.")
+        st.stop()
+        
+    # Load the ANN model
     ann_model = load_model('ann_model.h5')
+    
 except Exception as e:
     st.error(f"Error loading model files: {str(e)}")
     st.stop()
+
+# -------------------------------
+# Text preprocessing function
+# -------------------------------
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub(r'\[.*?\]', '', text)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    text = re.sub(r'<.*?>+', '', text)
+    text = re.sub(r'[%s]' % re.escape(string.punctuation), '', text)
+    text = re.sub(r'\n', '', text)
+    text = re.sub(r'\w*\d\w*', '', text)
+    return text
 
 # -------------------------------
 # Streamlit UI
@@ -61,27 +83,33 @@ input_text = st.text_area("News Article", height=200)
 
 if st.button("Check News"):
     if input_text.strip():
-        # Vectorize the input text
-        vectorized_input = vectorizer.transform([input_text])
-        
-        # Make prediction
-        prediction = ann_model.predict(vectorized_input.toarray())
-        probability = prediction[0][0]
-        
-        # Display results
-        st.subheader("🔍 Prediction Result:")
-        
-        if probability > 0.5:
-            st.success(f"✅ Genuine News (confidence: {probability*100:.2f}%)")
-            st.balloons()
-        else:
-            st.error(f"❌ Fake News (confidence: {(1-probability)*100:.2f}%)")
-        
-        # Show probability gauge
-        st.subheader("📊 Confidence Level")
-        st.progress(float(probability))
-        st.caption(f"Model confidence: {probability*100:.2f}% genuine")
-        
+        try:
+            # Preprocess the text
+            processed_text = preprocess_text(input_text)
+            
+            # Vectorize the input text
+            vectorized_input = vectorizer.transform([processed_text])
+            
+            # Make prediction
+            prediction = ann_model.predict(vectorized_input.toarray())
+            probability = prediction[0][0]
+            
+            # Display results
+            st.subheader("🔍 Prediction Result:")
+            
+            if probability > 0.5:
+                st.success(f"✅ Genuine News (confidence: {probability*100:.2f}%)")
+                st.balloons()
+            else:
+                st.error(f"❌ Fake News (confidence: {(1-probability)*100:.2f}%)")
+            
+            # Show probability gauge
+            st.subheader("📊 Confidence Level")
+            st.progress(float(probability))
+            st.caption(f"Model confidence: {probability*100:.2f}% genuine")
+            
+        except Exception as e:
+            st.error(f"Error during prediction: {str(e)}")
     else:
         st.warning("Please enter some text to analyze.")
 
