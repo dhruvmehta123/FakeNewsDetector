@@ -3,6 +3,8 @@ import joblib
 import numpy as np
 import os
 import requests
+from tensorflow.keras.models import load_model
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # -------------------------------
 # Google Drive download helper
@@ -23,68 +25,69 @@ def download_file_from_google_drive(file_id, dest_path):
                 f.write(chunk)
 
 # -------------------------------
-# GDrive files (only for large ones)
+# Download required files
 # -------------------------------
-gdrive_files = {
-    "knn_model.jb":  "1Fh1A5BvPV6sJJJeIBdFKJu3cDAxvDig3",
-    "rf_model.jb":   "10LLGlmX8hmYUAp1VeuKlUrTbvI2VtCZk"
+required_files = {
+    "ann_model.h5": "1Fh1A5BvPV6sJJJeIBdFKJu3cDAxvDig3",  # ANN model
+    "vectorizer.jb": "1lOpfkBsLF5VDnIev4w49HIW9BQRNLutf"  # You'll need to add this
 }
 
-for filename, file_id in gdrive_files.items():
+for filename, file_id in required_files.items():
     if not os.path.exists(filename):
-        download_file_from_google_drive(file_id, filename)
+        try:
+            download_file_from_google_drive(file_id, filename)
+            st.success(f"Downloaded {filename}")
+        except Exception as e:
+            st.error(f"Failed to download {filename}: {str(e)}")
+            st.stop()
 
 # -------------------------------
-# Load Models and Vectorizers
+# Load Model and Vectorizer
 # -------------------------------
-vectorizer = joblib.load('vectorizer.jb')      # TF-IDF: for LR
-vectorizer2 = joblib.load('vectorizer2.jb')    # Count: for KNN, tree models, NB
-
-models = {
-    "Logistic Regression": ("linear", joblib.load('lr_model.jb')),
-    "K-Nearest Neighbors": ("knn", joblib.load('knn_model.jb')),
-    "Random Forest": ("tree", joblib.load('rf_model.jb')),
-    "Naive Bayes": ("bayes", joblib.load('nb_model.jb'))
-}
+try:
+    vectorizer = joblib.load('vectorizer.jb')
+    ann_model = load_model('ann_model.h5')
+except Exception as e:
+    st.error(f"Error loading model files: {str(e)}")
+    st.stop()
 
 # -------------------------------
 # Streamlit UI
 # -------------------------------
-st.title("📰 Fake News Detection")
-st.write("Enter the news article below:")
+st.title("📰 Fake News Detection (ANN Model)")
+st.write("Enter the news article below to check if it's genuine or fake:")
 
-inputn = st.text_area("News Article")
+input_text = st.text_area("News Article", height=200)
 
 if st.button("Check News"):
-    if inputn.strip():
-        st.subheader("🔍 Model-wise Predictions:")
-
-        real_count = 0
-        fake_count = 0
-
-        for name, (model_type, model) in models.items():
-            if model_type == "linear":
-                vectorized_input = vectorizer.transform([inputn])
-                pred = model.predict(vectorized_input)[0]
-            else:
-                vectorized_input = vectorizer2.transform([inputn])
-                pred = model.predict(vectorized_input)[0]
-
-            if pred == 1:
-                st.success(f"{name}: Real News ✅")
-                real_count += 1
-            else:
-                st.error(f"{name}: Fake News ❌")
-                fake_count += 1
-
-        st.markdown("---")
-        st.subheader("🧠 Overall Verdict (Majority Voting):")
-
-        if real_count > fake_count:
-            st.success(f"The news is **Most Likely Real** 🟢 ({real_count} out of {len(models)} models)")
-        elif fake_count > real_count:
-            st.error(f"The news is **Most Likely Fake** 🔴 ({fake_count} out of {len(models)} models)")
+    if input_text.strip():
+        # Vectorize the input text
+        vectorized_input = vectorizer.transform([input_text])
+        
+        # Make prediction
+        prediction = ann_model.predict(vectorized_input.toarray())
+        probability = prediction[0][0]
+        
+        # Display results
+        st.subheader("🔍 Prediction Result:")
+        
+        if probability > 0.5:
+            st.success(f"✅ Genuine News (confidence: {probability*100:.2f}%)")
+            st.balloons()
         else:
-            st.warning("The models are evenly split. Verdict: **Inconclusive** ⚖️")
+            st.error(f"❌ Fake News (confidence: {(1-probability)*100:.2f}%)")
+        
+        # Show probability gauge
+        st.subheader("📊 Confidence Level")
+        st.progress(float(probability))
+        st.caption(f"Model confidence: {probability*100:.2f}% genuine")
+        
     else:
         st.warning("Please enter some text to analyze.")
+
+# Add some info
+st.markdown("---")
+st.info("""
+This app uses an Artificial Neural Network (ANN) trained on thousands of news articles to detect fake news.
+The model analyzes the text content and provides a probability score indicating how likely the news is to be genuine.
+""")
