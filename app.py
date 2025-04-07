@@ -1,52 +1,22 @@
 import streamlit as st
 import joblib
-import numpy as np
 
-# Load vectorizers
-vectorizer = joblib.load('vectorizer.jb')      # For Logistic Regression
-vectorizer2 = joblib.load('vectorizer2.jb')    # For Naive Bayes
+vectorizer = joblib.load("vectorizer.jb")
+model = joblib.load("lr_model.jb")
 
-# Load models
-models = {
-    "Logistic Regression": ("linear", joblib.load('lr_model.jb')),
-    "Naive Bayes": ("bayes", joblib.load('nb_model.jb'))
-}
+st.title("Fake News Detector")
+st.write("Enter a News Article below to check whether it is Fake or Real. ")
 
-st.title("📰 Fake News Detection")
-st.write("Enter the news article below:")
-
-inputn = st.text_area("News Article")
+inputn = st.text_area("News Article:","")
 
 if st.button("Check News"):
     if inputn.strip():
-        st.subheader("🔍 Model-wise Predictions:")
+        transform_input = vectorizer.transform([inputn])
+        prediction = model.predict(transform_input)
 
-        real_count = 0
-        fake_count = 0
-
-        for name, (model_type, model) in models.items():
-            if model_type == "linear":
-                vectorized_input = vectorizer.transform([inputn])
-            else:  # bayes
-                vectorized_input = vectorizer2.transform([inputn])
-                
-            pred = model.predict(vectorized_input)[0]
-
-            if pred == 1:
-                st.success(f"{name}: Real News ✅")
-                real_count += 1
-            else:
-                st.error(f"{name}: Fake News ❌")
-                fake_count += 1
-
-        st.markdown("---")
-        st.subheader("🧠 Overall Verdict (Majority Voting):")
-
-        if real_count > fake_count:
-            st.success(f"The news is **Most Likely Real** 🟢 ({real_count} out of {len(models)} models)")
-        elif fake_count > real_count:
-            st.error(f"The news is **Most Likely Fake** 🔴 ({fake_count} out of {len(models)} models)")
+        if prediction[0] == 1:
+            st.success("The News is Real! ")
         else:
-            st.warning("The models are evenly split. Verdict: **Inconclusive** ⚖️")
+            st.error("The News is Fake! ")
     else:
-        st.warning("Please enter some text to analyze.")
+        st.warning("Please enter some text to Analyze. ") 
